@@ -2,8 +2,6 @@
 
 Hyperminimalist backtesting environment for scalping strategies on CME Globex futures. Every parameter visible, every result visible, no black boxes.
 
-![Dashboard](screenshot_dashboard.png)
-
 ## Features
 
 - **Tick-level backtesting** on 93M+ NQ futures ticks (1 year of Databento trade data)
