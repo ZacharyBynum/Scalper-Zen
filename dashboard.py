@@ -1,0 +1,57 @@
+"""scalpr_zen — launch the dashboard with all parameters visible at the top."""
+
+import time
+import webbrowser
+from threading import Timer
+
+from scalpr_zen.engine import EngineConfig, run
+from scalpr_zen.gpu import select_device
+from scalpr_zen.types import InstrumentSpec
+from scalpr_zen.web import create_app
+
+# ═══════════════════════════════════════════════════════
+# PARAMETERS
+# ═══════════════════════════════════════════════════════
+CACHE_PATH = "cache/nq_ticks.npz"
+INSTRUMENT_SYMBOL = "NQ"
+TICK_SIZE = 0.25
+POINT_VALUE = 20.00
+FAST_EMA_PERIOD = 50
+SLOW_EMA_PERIOD = 200
+TP_POINTS = 10.0
+SL_POINTS = 5.0
+# ═══════════════════════════════════════════════════════
+
+if __name__ == "__main__":
+    select_device()
+
+    instrument = InstrumentSpec(
+        symbol=INSTRUMENT_SYMBOL,
+        tick_size=TICK_SIZE,
+        point_value=POINT_VALUE,
+    )
+
+    config = EngineConfig(
+        instrument=instrument,
+        tp_points=TP_POINTS,
+        sl_points=SL_POINTS,
+        fast_period=FAST_EMA_PERIOD,
+        slow_period=SLOW_EMA_PERIOD,
+        cache_path=CACHE_PATH,
+    )
+
+    print(f"Running backtest: EMA({FAST_EMA_PERIOD}/{SLOW_EMA_PERIOD}), TP={TP_POINTS}, SL={SL_POINTS}")
+
+    t0 = time.perf_counter()
+    result = run(config)
+    elapsed = time.perf_counter() - t0
+
+    if not result.success:
+        print(f"Backtest failed: {result.error}")
+    else:
+        print(f"Backtest completed in {elapsed:.1f}s — {result.summary.total_trades} trades")
+        print("Starting dashboard at http://localhost:5000")
+
+        app = create_app(result)
+        Timer(1.0, lambda: webbrowser.open("http://localhost:5000")).start()
+        app.run(host="localhost", port=5000, debug=False)

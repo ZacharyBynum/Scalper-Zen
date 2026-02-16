@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>scalpr_zen — Dashboard</title>
+    <script src="https://unpkg.com/lightweight-charts@4/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0d1117;
+            color: #c9d1d9;
+            font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", monospace;
+            font-size: 14px;
+            padding: 24px;
+        }
+        a { color: #58a6ff; }
+
+        /* Header */
+        .header {
+            margin-bottom: 20px;
+            border-bottom: 1px solid #21262d;
+            padding-bottom: 16px;
+        }
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #e6edf3;
+            margin-bottom: 6px;
+        }
+        .header .subtitle {
+            font-size: 13px;
+            color: #7d8590;
+        }
+        .header .subtitle span {
+            color: #c9d1d9;
+        }
+
+        /* Stat cards */
+        .stats {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+        .stat-card {
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-radius: 6px;
+            padding: 12px 18px;
+            flex: 1;
+            min-width: 140px;
+        }
+        .stat-card .label {
+            font-size: 11px;
+            color: #7d8590;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+        .stat-card .value {
+            font-size: 20px;
+            font-weight: 600;
+            color: #e6edf3;
+        }
+        .stat-card .value.positive { color: #3fb950; }
+        .stat-card .value.negative { color: #f85149; }
+
+        /* Chart containers */
+        .section {
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-radius: 6px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+        .section h2 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #e6edf3;
+            margin-bottom: 12px;
+        }
+        #equity-chart {
+            width: 100%;
+            height: 360px;
+        }
+
+        /* Bottom row: two columns */
+        .bottom-row {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+        }
+        .winloss-chart-container {
+            height: 260px;
+        }
+
+        /* Calendar heatmap */
+        .heatmap-wrapper {
+            overflow-x: auto;
+        }
+        .heatmap-months {
+            display: flex;
+            margin-bottom: 4px;
+            margin-left: 32px;
+            font-size: 11px;
+            color: #7d8590;
+        }
+        .heatmap-body {
+            display: flex;
+        }
+        .heatmap-day-labels {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            margin-right: 4px;
+            font-size: 10px;
+            color: #7d8590;
+        }
+        .heatmap-day-labels span {
+            height: 13px;
+            line-height: 13px;
+        }
+        .heatmap-grid {
+            display: grid;
+            grid-template-rows: repeat(7, 13px);
+            grid-auto-flow: column;
+            grid-auto-columns: 13px;
+            gap: 2px;
+        }
+        .heatmap-cell {
+            width: 13px;
+            height: 13px;
+            border-radius: 2px;
+            background: #161b22;
+        }
+        .heatmap-cell[data-pnl] {
+            cursor: pointer;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: fixed;
+            background: #1c2128;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            padding: 6px 10px;
+            font-size: 12px;
+            color: #e6edf3;
+            pointer-events: none;
+            z-index: 100;
+            display: none;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>SCALPR ZEN v0.1 — Dashboard</h1>
+    <div class="subtitle">
+        <span>{{ result.strategy_name }}</span>
+        &nbsp;|&nbsp; <span>{{ result.params.instrument }}</span>
+        &nbsp;|&nbsp; EMA(<span>{{ result.params.fast_ema }}</span>/<span>{{ result.params.slow_ema }}</span>)
+        &nbsp;|&nbsp; TP: <span>{{ result.params.tp_points }}</span> &nbsp; SL: <span>{{ result.params.sl_points }}</span>
+        &nbsp;|&nbsp; {{ result.params.data_range }}
+    </div>
+</div>
+
+{% if result.summary %}
+{% set s = result.summary %}
+<div class="stats">
+    <div class="stat-card">
+        <div class="label">Trades</div>
+        <div class="value">{{ "{:,}".format(s.total_trades) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Win Rate</div>
+        <div class="value">{{ "%.1f"|format(s.win_rate * 100) }}%</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Total P&amp;L</div>
+        <div class="value {{ 'positive' if s.total_pnl_dollars >= 0 else 'negative' }}">
+            ${{ "{:,.0f}".format(s.total_pnl_dollars) }}
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Profit Factor</div>
+        <div class="value">{{ "%.2f"|format(s.profit_factor) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Max Drawdown</div>
+        <div class="value negative">${{ "{:,.0f}".format(s.max_drawdown_dollars) }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="label">Avg Win / Loss</div>
+        <div class="value">${{ "%.0f"|format(s.avg_win) }} / ${{ "%.0f"|format(s.avg_loss) }}</div>
+    </div>
+</div>
+{% endif %}
+
+<div class="section">
+    <h2>Equity Curve</h2>
+    <div id="equity-chart"></div>
+</div>
+
+<div class="bottom-row">
+    <div class="section">
+        <h2>Win / Loss Distribution</h2>
+        <div class="winloss-chart-container">
+            <canvas id="winloss-chart"></canvas>
+        </div>
+    </div>
+    <div class="section">
+        <h2>Daily P&amp;L Heatmap</h2>
+        <div class="heatmap-wrapper">
+            <div class="heatmap-months" id="heatmap-months"></div>
+            <div class="heatmap-body">
+                <div class="heatmap-day-labels">
+                    <span></span>
+                    <span>Mon</span>
+                    <span></span>
+                    <span>Wed</span>
+                    <span></span>
+                    <span>Fri</span>
+                    <span></span>
+                </div>
+                <div class="heatmap-grid" id="heatmap-grid"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+const DATA = {{ result | tojson }};
+
+// ── Equity Curve (lightweight-charts) ──────────────────
+(function() {
+    const container = document.getElementById('equity-chart');
+    const chart = LightweightCharts.createChart(container, {
+        layout: {
+            background: { color: '#161b22' },
+            textColor: '#7d8590',
+            fontFamily: '"Cascadia Code", monospace',
+        },
+        grid: {
+            vertLines: { color: '#21262d' },
+            horzLines: { color: '#21262d' },
+        },
+        crosshair: {
+            mode: LightweightCharts.CrosshairMode.Normal,
+        },
+        rightPriceScale: {
+            borderColor: '#21262d',
+        },
+        timeScale: {
+            borderColor: '#21262d',
+            timeVisible: false,
+        },
+    });
+
+    const areaSeries = chart.addAreaSeries({
+        topColor: 'rgba(63, 185, 80, 0.4)',
+        bottomColor: 'rgba(63, 185, 80, 0.0)',
+        lineColor: '#3fb950',
+        lineWidth: 2,
+    });
+
+    areaSeries.setData(DATA.equity_curve);
+    chart.timeScale().fitContent();
+
+    new ResizeObserver(() => {
+        chart.applyOptions({ width: container.clientWidth });
+    }).observe(container);
+})();
+
+// ── Win/Loss Distribution (Chart.js) ──────────────────
+(function() {
+    const ctx = document.getElementById('winloss-chart').getContext('2d');
+    const wl = DATA.win_loss;
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['TP Long', 'SL Long', 'TP Short', 'SL Short'],
+            datasets: [{
+                data: [wl.tp_long, wl.sl_long, wl.tp_short, wl.sl_short],
+                backgroundColor: ['#3fb950', '#f85149', '#3fb950', '#f85149'],
+                borderRadius: 3,
+                barPercentage: 0.7,
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#1c2128',
+                    borderColor: '#30363d',
+                    borderWidth: 1,
+                    titleFont: { family: '"Cascadia Code", monospace' },
+                    bodyFont: { family: '"Cascadia Code", monospace' },
+                    callbacks: {
+                        label: function(ctx) {
+                            return ctx.raw.toLocaleString() + ' trades';
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: '#21262d' },
+                    ticks: {
+                        color: '#7d8590',
+                        font: { family: '"Cascadia Code", monospace' },
+                        callback: function(v) { return v.toLocaleString(); }
+                    }
+                },
+                y: {
+                    grid: { display: false },
+                    ticks: {
+                        color: '#c9d1d9',
+                        font: { family: '"Cascadia Code", monospace', size: 13 }
+                    }
+                }
+            }
+        }
+    });
+})();
+
+// ── Daily P&L Heatmap ─────────────────────────────────
+(function() {
+    const grid = document.getElementById('heatmap-grid');
+    const monthsEl = document.getElementById('heatmap-months');
+    const tooltip = document.getElementById('tooltip');
+    const dailyPnl = DATA.daily_pnl;
+
+    if (dailyPnl.length === 0) return;
+
+    // Build lookup
+    const pnlMap = new Map();
+    let maxAbs = 0;
+    dailyPnl.forEach(d => {
+        pnlMap.set(d.date, d.pnl);
+        maxAbs = Math.max(maxAbs, Math.abs(d.pnl));
+    });
+
+    // Date range
+    const firstDate = new Date(dailyPnl[0].date + 'T00:00:00Z');
+    const lastDate = new Date(dailyPnl[dailyPnl.length - 1].date + 'T00:00:00Z');
+
+    // Align to week start (Sunday)
+    const start = new Date(firstDate);
+    start.setUTCDate(start.getUTCDate() - start.getUTCDay());
+
+    // Track month boundaries for labels
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    let currentMonth = -1;
+    let weekIndex = 0;
+    const monthMarkers = [];
+
+    // Create cells
+    const current = new Date(start);
+    while (current <= lastDate) {
+        const dayOfWeek = current.getUTCDay();
+
+        // Track week transitions for month labels
+        if (dayOfWeek === 0) {
+            const m = current.getUTCMonth();
+            if (m !== currentMonth) {
+                monthMarkers.push({ week: weekIndex, month: monthNames[m] });
+                currentMonth = m;
+            }
+            weekIndex++;
+        }
+
+        const dateStr = current.toISOString().split('T')[0];
+        const cell = document.createElement('div');
+        cell.className = 'heatmap-cell';
+
+        if (pnlMap.has(dateStr)) {
+            const pnl = pnlMap.get(dateStr);
+            const intensity = maxAbs > 0 ? Math.min(Math.abs(pnl) / maxAbs, 1) : 0;
+            const alpha = 0.15 + intensity * 0.85;
+            if (pnl >= 0) {
+                cell.style.backgroundColor = `rgba(63, 185, 80, ${alpha})`;
+            } else {
+                cell.style.backgroundColor = `rgba(248, 81, 73, ${alpha})`;
+            }
+            cell.dataset.pnl = pnl.toFixed(2);
+            cell.dataset.date = dateStr;
+        } else {
+            cell.style.backgroundColor = '#0d1117';
+        }
+
+        grid.appendChild(cell);
+        current.setUTCDate(current.getUTCDate() + 1);
+    }
+
+    // Month labels
+    const cellSize = 15; // 13px cell + 2px gap
+    monthMarkers.forEach(m => {
+        const span = document.createElement('span');
+        span.textContent = m.month;
+        span.style.position = 'absolute';
+        span.style.left = (m.week * cellSize) + 'px';
+        monthsEl.appendChild(span);
+    });
+    monthsEl.style.position = 'relative';
+    monthsEl.style.height = '16px';
+
+    // Tooltip
+    grid.addEventListener('mouseover', function(e) {
+        if (e.target.dataset.pnl) {
+            const pnl = parseFloat(e.target.dataset.pnl);
+            const sign = pnl >= 0 ? '+' : '';
+            tooltip.textContent = e.target.dataset.date + ':  ' + sign + '$' + pnl.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            tooltip.style.display = 'block';
+        }
+    });
+    grid.addEventListener('mousemove', function(e) {
+        tooltip.style.left = (e.clientX + 12) + 'px';
+        tooltip.style.top = (e.clientY - 8) + 'px';
+    });
+    grid.addEventListener('mouseout', function(e) {
+        if (e.target.dataset.pnl) {
+            tooltip.style.display = 'none';
+        }
+    });
+})();
+</script>
+
+</body>
+</html>
