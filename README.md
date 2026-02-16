@@ -92,4 +92,4 @@ pytest tests/
 
 ## License
 
-MIT
+All rights reserved. See [LICENSE](LICENSE).
